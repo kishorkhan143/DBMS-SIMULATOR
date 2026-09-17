@@ -1,6 +1,6 @@
 import React from 'react';
 import { Part, Topic } from '../types/sql';
-import { Database, Terminal, RotateCcw, ShieldCheck, KeyRound, Link2, BookOpen } from 'lucide-react';
+import { Database, Terminal, RotateCcw, ShieldCheck, KeyRound, Link2, GitMerge, BookOpen } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface PartSelectorProps {
@@ -26,6 +26,7 @@ export const PartSelector: React.FC<PartSelectorProps> = ({
       case 'part-4': return ShieldCheck;
       case 'part-5': return KeyRound;
       case 'part-6': return Link2;
+      case 'part-7': return GitMerge;
       default: return Database;
     }
   };

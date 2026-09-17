@@ -93,7 +93,10 @@ export type AnimationType =
   | 'foreign_key_insert'
   | 'foreign_key_drop'
   | 'foreign_key_add'
-  | 'foreign_key_error';
+  | 'foreign_key_error'
+  | 'join_inner'
+  | 'join_left'
+  | 'join_right';
 
 export interface CommandStep {
   id: string;

@@ -22,7 +22,8 @@ import {
   CornerDownRight,
   Key,
   AlertTriangle,
-  Link2
+  Link2,
+  GitMerge
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -524,13 +525,19 @@ export const TopicViewer: React.FC<TopicViewerProps> = ({
                   </table>
                 </div>
 
-                {/* Referenced Secondary Table (e.g. Parent Table in Foreign Keys) */}
+                {/* Referenced Secondary Table (e.g. Parent Table in Foreign Keys or Right Table in Joins) */}
                 {activeState.secondaryTable && (
                   <div className="mt-3.5 p-3.5 sm:p-4 rounded-2xl bg-white/30 dark:bg-slate-900/30 border border-blue-500/30 backdrop-blur-xl shadow-xs space-y-2.5">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <Link2 className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                        <span className="text-xs text-slate-500">Referenced Parent Table:</span>
+                        {currentStep.animationType?.startsWith('join_') ? (
+                          <GitMerge className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                        ) : (
+                          <Link2 className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                        )}
+                        <span className="text-xs text-slate-500">
+                          {currentStep.animationType?.startsWith('join_') ? 'Joined Right Table:' : 'Referenced Parent Table:'}
+                        </span>
                         <span className="font-mono text-xs font-bold text-blue-900 dark:text-blue-200 bg-blue-500/15 px-2.5 py-0.5 rounded-lg border border-blue-500/30">
                           {activeState.secondaryTable.name}
                         </span>

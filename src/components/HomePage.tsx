@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Part } from '../types/sql';
-import { Database, ArrowRight, Terminal, RotateCcw, ShieldCheck, Play, ChevronDown, KeyRound, Sparkles, Link2 } from 'lucide-react';
+import { Database, ArrowRight, Terminal, RotateCcw, ShieldCheck, Play, ChevronDown, KeyRound, Sparkles, Link2, GitMerge } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useIsMobile } from '../utils/useIsMobile';
 
@@ -154,6 +154,26 @@ export const HomePage: React.FC<HomePageProps> = ({
       gradient: 'from-emerald-600 to-teal-600',
       tagBg: 'bg-teal-500/15 text-teal-800 dark:text-teal-300 border-teal-500/30',
       actionText: 'Explore Part 6 — Foreign Keys & Referential Integrity',
+    },
+    'part-7': {
+      color: 'amber',
+      badge: 'Part 7 • SQL Joins',
+      icon: GitMerge,
+      highlightTags: [
+        'use pandiyan_store',
+        'customers & transactions',
+        'insert unmatched (zehra, khan)',
+        'INNER JOIN (Intersection)',
+        'Projection (t_id, amount, c_name)',
+        'LEFT JOIN (Preserve Left)',
+        'RIGHT JOIN (Preserve Right)',
+        'NULL Generation in Unmatched'
+      ],
+      stepsCount: '9 Steps',
+      modulesCount: '3 Modules',
+      gradient: 'from-amber-600 to-orange-600',
+      tagBg: 'bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30',
+      actionText: 'Explore Part 7 — Relational Joins',
     }
   };
 

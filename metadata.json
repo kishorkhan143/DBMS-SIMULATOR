@@ -1,6 +1,6 @@
 {
   "name": "SQL Interactive Visualizer & Learning Lab",
-  "description": "Interactive animated visualizer, step-by-step curriculum, practice SQL terminal, and quizzes for MySQL DDL and DML commands.",
+  "description": "Interactive animated visualizer, step-by-step curriculum, practice SQL terminal, and quizzes for MySQL DDL, DML, Constraints, Keys, and Joins.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

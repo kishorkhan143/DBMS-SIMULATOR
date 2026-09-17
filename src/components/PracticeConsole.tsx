@@ -57,7 +57,7 @@ export const PracticeConsole: React.FC<PracticeConsoleProps> = ({
       timestamp: 'Session Started'
     }
   ]);
-  const [presetFilter, setPresetFilter] = useState<'all' | 'p1' | 'p2' | 'p3' | 'p4' | 'p5' | 'p6'>('all');
+  const [presetFilter, setPresetFilter] = useState<'all' | 'p1' | 'p2' | 'p3' | 'p4' | 'p5' | 'p6' | 'p7'>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const historyBottomRef = useRef<HTMLDivElement>(null);
@@ -121,7 +121,9 @@ export const PracticeConsole: React.FC<PracticeConsoleProps> = ({
         ? item.label.startsWith('P4')
         : presetFilter === 'p5'
         ? item.label.startsWith('P5')
-        : item.label.startsWith('P6');
+        : presetFilter === 'p6'
+        ? item.label.startsWith('P6')
+        : item.label.startsWith('P7');
     const matchesSearch =
       searchQuery === '' ||
       item.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -314,7 +316,7 @@ export const PracticeConsole: React.FC<PracticeConsoleProps> = ({
 
             {/* Filter Pills */}
             <div className="flex flex-wrap items-center gap-1.5 p-1 rounded-2xl bg-white/45 border border-white/70 backdrop-blur-md shadow-inner">
-              {(['all', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6'] as const).map((filter) => (
+              {(['all', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7'] as const).map((filter) => (
                 <button
                   key={filter}
                   onClick={() => setPresetFilter(filter)}
@@ -336,7 +338,9 @@ export const PracticeConsole: React.FC<PracticeConsoleProps> = ({
                     ? 'P4 (Constraints)'
                     : filter === 'p5'
                     ? 'P5 (Primary Keys)'
-                    : 'P6 (Foreign Keys)'}
+                    : filter === 'p6'
+                    ? 'P6 (Foreign Keys)'
+                    : 'P7 (Joins)'}
                 </button>
               ))}
             </div>

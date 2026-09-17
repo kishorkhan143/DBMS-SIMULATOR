@@ -62,6 +62,30 @@ export function createInitialCatalog(): SystemCatalog {
               { id: 2, name: 'manish', salary: '400.00', join_date: '2001-01-01', ph_no: '7094507825' },
               { id: 1, name: 'kishor', salary: null, join_date: null, ph_no: null }
             ]
+          },
+          customers: {
+            name: 'customers',
+            columns: [
+              { name: 'c_id', type: 'int', isPrimary: true, autoIncrement: true, nullable: false, isUnique: true },
+              { name: 'c_name', type: 'varchar(50)', nullable: true },
+              { name: 'age', type: 'int', nullable: true }
+            ],
+            rows: [
+              { c_id: 1, c_name: 'kishor', age: 18 },
+              { c_id: 2, c_name: 'begam', age: 19 }
+            ]
+          },
+          transactions: {
+            name: 'transactions',
+            columns: [
+              { name: 't_id', type: 'int', isPrimary: true, autoIncrement: true, nullable: false, isUnique: true },
+              { name: 'amount', type: 'decimal(6,2)', nullable: true },
+              { name: 'customer_id', type: 'int', nullable: false, isForeignKey: true, referencesTable: 'customers', referencesColumn: 'c_id' }
+            ],
+            rows: [
+              { t_id: 1, amount: '45.67', customer_id: 1 },
+              { t_id: 2, amount: '75.67', customer_id: 1 }
+            ]
           }
         }
       }
@@ -1694,6 +1718,218 @@ export function executeQuery(rawSql: string, catalog: SystemCatalog): {
         message: `Query OK, ${rowsAdded} ${rowsAdded === 1 ? 'row' : 'rows'} affected (${((performance.now() - start) / 1000).toFixed(3)} sec)\nRecords: ${rowsAdded}  Duplicates: 0  Warnings: 0`,
         affectedRows: rowsAdded,
         timeMs: +(performance.now() - start).toFixed(2)
+      },
+      updatedCatalog
+    };
+  }
+
+  // 22b. SELECT ... FROM table1 [INNER|LEFT|RIGHT] JOIN table2 ON condition [WHERE condition]
+  const joinSelectMatch = cleanSql.match(
+    /^select\s+([\s\S]+?)\s+from\s+([a-zA-Z0-9_]+)(?:\s+(?:as\s+)?([a-zA-Z0-9_]+))?\s+(?:(inner|left|right)\s+)?join\s+([a-zA-Z0-9_]+)(?:\s+(?:as\s+)?([a-zA-Z0-9_]+))?\s+on\s+([\s\S]+?)(?:\s+where\s+([\s\S]+))?$/i
+  );
+  if (joinSelectMatch) {
+    const colExpr = joinSelectMatch[1].trim();
+    const table1Name = joinSelectMatch[2].trim();
+    const table1Alias = joinSelectMatch[3]?.trim();
+    const joinType = (joinSelectMatch[4] || 'inner').toLowerCase();
+    const table2Name = joinSelectMatch[5].trim();
+    const table2Alias = joinSelectMatch[6]?.trim();
+    const joinCond = joinSelectMatch[7].trim();
+    const whereExpr = joinSelectMatch[8] ? joinSelectMatch[8].trim() : null;
+
+    const table1 = currentDb.tables[table1Name];
+    if (!table1) {
+      return {
+        result: {
+          success: false,
+          message: `ERROR 1146 (42S02): Table '${curDbName}.${table1Name}' doesn't exist`,
+          timeMs: +(performance.now() - start).toFixed(2)
+        },
+        updatedCatalog
+      };
+    }
+
+    const table2 = currentDb.tables[table2Name];
+    if (!table2) {
+      return {
+        result: {
+          success: false,
+          message: `ERROR 1146 (42S02): Table '${curDbName}.${table2Name}' doesn't exist`,
+          timeMs: +(performance.now() - start).toFixed(2)
+        },
+        updatedCatalog
+      };
+    }
+
+    // Parse ON condition, e.g., transactions.customer_id = customers.c_id
+    const condParts = joinCond.split('=').map(s => s.trim());
+    if (condParts.length !== 2) {
+      return {
+        result: {
+          success: false,
+          message: `ERROR 1064 (42000): You have an error in your SQL syntax near '${joinCond}'`,
+          timeMs: +(performance.now() - start).toFixed(2)
+        },
+        updatedCatalog
+      };
+    }
+
+    const isMatchTable1 = (tblName: string) => {
+      const lower = tblName.toLowerCase();
+      return lower === table1Name.toLowerCase() || (table1Alias && lower === table1Alias.toLowerCase());
+    };
+
+    const parseSide = (sideStr: string) => {
+      if (sideStr.includes('.')) {
+        const [t, c] = sideStr.split('.').map(s => s.trim());
+        return { isT1: isMatchTable1(t), column: c };
+      }
+      const hasInT1 = table1.columns.some(c => c.name.toLowerCase() === sideStr.toLowerCase());
+      const hasInT2 = table2.columns.some(c => c.name.toLowerCase() === sideStr.toLowerCase());
+      if (hasInT1 && !hasInT2) return { isT1: true, column: sideStr };
+      if (hasInT2 && !hasInT1) return { isT1: false, column: sideStr };
+      return { isT1: true, column: sideStr };
+    };
+
+    const sideA = parseSide(condParts[0]);
+    const sideB = parseSide(condParts[1]);
+
+    const t1Col = sideA.isT1 ? sideA.column : sideB.column;
+    const t2Col = sideA.isT1 ? sideB.column : sideA.column;
+
+    const t1Rows = table1.rows;
+    const t2Rows = table2.rows;
+    const joinedTuples: { r1: Record<string, any> | null; r2: Record<string, any> | null }[] = [];
+
+    if (joinType === 'inner') {
+      for (const r1 of t1Rows) {
+        const v1 = r1[t1Col];
+        if (v1 === null || v1 === undefined) continue;
+        for (const r2 of t2Rows) {
+          const v2 = r2[t2Col];
+          if (v2 === null || v2 === undefined) continue;
+          if (String(v1) === String(v2)) {
+            joinedTuples.push({ r1, r2 });
+          }
+        }
+      }
+    } else if (joinType === 'left') {
+      for (const r1 of t1Rows) {
+        const v1 = r1[t1Col];
+        let matched = false;
+        if (v1 !== null && v1 !== undefined) {
+          for (const r2 of t2Rows) {
+            const v2 = r2[t2Col];
+            if (v2 !== null && v2 !== undefined && String(v1) === String(v2)) {
+              joinedTuples.push({ r1, r2 });
+              matched = true;
+            }
+          }
+        }
+        if (!matched) {
+          joinedTuples.push({ r1, r2: null });
+        }
+      }
+    } else if (joinType === 'right') {
+      for (const r2 of t2Rows) {
+        const v2 = r2[t2Col];
+        let matched = false;
+        if (v2 !== null && v2 !== undefined) {
+          for (const r1 of t1Rows) {
+            const v1 = r1[t1Col];
+            if (v1 !== null && v1 !== undefined && String(v1) === String(v2)) {
+              joinedTuples.push({ r1, r2 });
+              matched = true;
+            }
+          }
+        }
+        if (!matched) {
+          joinedTuples.push({ r1: null, r2 });
+        }
+      }
+    }
+
+    // Determine projected columns
+    interface OutCol {
+      display: string;
+      getter: (r1: Record<string, any> | null, r2: Record<string, any> | null) => any;
+    }
+    const outCols: OutCol[] = [];
+
+    if (colExpr === '*') {
+      for (const c of table1.columns) {
+        outCols.push({
+          display: c.name,
+          getter: (r1, _) => (r1 ? r1[c.name] : null)
+        });
+      }
+      for (const c of table2.columns) {
+        outCols.push({
+          display: c.name,
+          getter: (_, r2) => (r2 ? r2[c.name] : null)
+        });
+      }
+    } else {
+      const items = splitTopLevelCommas(colExpr);
+      for (const item of items) {
+        const aliasMatch = item.match(/^([\s\S]+?)(?:\s+(?:as\s+)?([a-zA-Z0-9_]+))?$/i);
+        const source = aliasMatch ? aliasMatch[1].trim() : item.trim();
+        const display = aliasMatch && aliasMatch[2] ? aliasMatch[2].trim() : (source.includes('.') ? source.split('.')[1] : source);
+
+        if (source.includes('.')) {
+          const [tbl, col] = source.split('.').map(s => s.trim());
+          if (isMatchTable1(tbl)) {
+            outCols.push({ display, getter: (r1, _) => (r1 ? r1[col] : null) });
+          } else {
+            outCols.push({ display, getter: (_, r2) => (r2 ? r2[col] : null) });
+          }
+        } else {
+          // Unqualified column name: search in table1 first, then table2
+          const inT1 = table1.columns.some(c => c.name.toLowerCase() === source.toLowerCase());
+          const inT2 = table2.columns.some(c => c.name.toLowerCase() === source.toLowerCase());
+          if (inT1 && !inT2) {
+            outCols.push({ display, getter: (r1, _) => (r1 ? r1[source] : null) });
+          } else if (inT2 && !inT1) {
+            outCols.push({ display, getter: (_, r2) => (r2 ? r2[source] : null) });
+          } else {
+            outCols.push({
+              display,
+              getter: (r1, r2) => {
+                if (r1 && r1[source] !== undefined) return r1[source];
+                if (r2 && r2[source] !== undefined) return r2[source];
+                return null;
+              }
+            });
+          }
+        }
+      }
+    }
+
+    let finalTuples = joinedTuples;
+    if (whereExpr) {
+      finalTuples = finalTuples.filter(({ r1, r2 }) => {
+        const mergedObj: Record<string, any> = {};
+        if (r2) Object.assign(mergedObj, r2);
+        if (r1) Object.assign(mergedObj, r1);
+        return evaluateWherePredicate(mergedObj, whereExpr);
+      });
+    }
+
+    const gridRows = finalTuples.map(({ r1, r2 }) =>
+      outCols.map(col => {
+        const val = col.getter(r1, r2);
+        return val !== undefined && val !== null ? String(val) : 'NULL';
+      })
+    );
+
+    const duration = +(performance.now() - start).toFixed(2);
+    return {
+      result: {
+        success: true,
+        message: `${gridRows.length} ${gridRows.length === 1 ? 'row' : 'rows'} in set (${(duration / 1000).toFixed(3)} sec)`,
+        columns: outCols.map(c => c.display),
+        rows: gridRows,
+        timeMs: duration
       },
       updatedCatalog
     };
