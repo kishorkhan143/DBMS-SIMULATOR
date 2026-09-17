@@ -1,6 +1,6 @@
 import React from 'react';
 import { Part, Topic } from '../types/sql';
-import { Database, Terminal, RotateCcw, ShieldCheck } from 'lucide-react';
+import { Database, Terminal, RotateCcw, ShieldCheck, KeyRound, Link2, BookOpen } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface PartSelectorProps {
@@ -18,14 +18,14 @@ export const PartSelector: React.FC<PartSelectorProps> = ({
   onSelectPart,
   onSelectTopic,
 }) => {
-  const visibleParts = parts.filter(p => ['part-1', 'part-2', 'part-3', 'part-4'].includes(p.id));
-
   const getPartIcon = (id: string) => {
     switch (id) {
       case 'part-1': return Database;
       case 'part-2': return Terminal;
       case 'part-3': return RotateCcw;
       case 'part-4': return ShieldCheck;
+      case 'part-5': return KeyRound;
+      case 'part-6': return Link2;
       default: return Database;
     }
   };
@@ -33,54 +33,45 @@ export const PartSelector: React.FC<PartSelectorProps> = ({
   const Icon = getPartIcon(selectedPart.id);
 
   return (
-    <div className="liquid-glass glass-sheen rounded-3xl p-4 sm:p-5 border border-white/80 shadow-sm space-y-3">
-      {/* Sleek Apple Header: Active Part Title & Segmented Track Switcher */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-white/60">
+    <div className="liquid-glass glass-sheen rounded-3xl p-4 sm:p-5 border border-white/80 dark:border-slate-800/80 shadow-sm space-y-3">
+      {/* Sleek Apple Header: Active Part Title & Module Counter */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-white/60 dark:border-slate-800/60">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-600 text-white flex items-center justify-center shadow-md shadow-emerald-600/20 shrink-0">
             <Icon className="w-4 h-4" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-800 border border-emerald-500/25 backdrop-blur-md">
+              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/25 backdrop-blur-md">
                 Part {selectedPart.number || selectedPart.id.replace('part-', '')}
               </span>
-              <h2 className="text-sm sm:text-base font-bold text-slate-900 tracking-tight">
+              <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 tracking-tight">
                 {selectedPart.title}
               </h2>
             </div>
-            <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1">
               {selectedPart.subtitle}
             </p>
           </div>
         </div>
 
-        {/* Apple Segmented Pill Track Switcher */}
-        <div className="flex items-center gap-1 p-1 rounded-full bg-white/45 border border-white/65 backdrop-blur-xl shadow-inner self-start sm:self-auto shrink-0">
-          {visibleParts.map((p) => {
-            const isCurrent = p.id === selectedPart.id;
-            const partNum = p.number || p.id.replace('part-', '');
+        {/* Part 5 & Part 6 Fast Switcher Pill */}
+        <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-white/50 dark:bg-slate-800/60 border border-white/70 dark:border-slate-700/70 backdrop-blur-md self-start sm:self-auto shrink-0 shadow-2xs">
+          {parts.map((p) => {
+            const isSelected = p.id === selectedPart.id;
+            const PartIcon = getPartIcon(p.id);
             return (
               <button
                 key={p.id}
-                onClick={() => {
-                  onSelectPart(p);
-                  if (p.topics.length > 0) onSelectTopic(p.topics[0]);
-                }}
-                className={`relative px-3 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer ${
-                  isCurrent
-                    ? 'text-slate-900 font-bold'
-                    : 'text-slate-600 hover:text-slate-900'
+                onClick={() => onSelectPart(p)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                  isSelected
+                    ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-xs font-bold'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-slate-700/60'
                 }`}
               >
-                {isCurrent && (
-                  <motion.div
-                    layoutId="partTrackIndicator"
-                    className="absolute inset-0 rounded-full bg-white/95 border border-white shadow-xs backdrop-blur-lg -z-10"
-                    transition={{ type: 'spring', stiffness: 450, damping: 35 }}
-                  />
-                )}
-                Part {partNum}
+                <PartIcon className="w-3.5 h-3.5" />
+                <span>Part {p.number || p.id.replace('part-', '')}</span>
               </button>
             );
           })}
@@ -111,7 +102,7 @@ export const PartSelector: React.FC<PartSelectorProps> = ({
               <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${
                 isTopicSelected ? 'bg-black/20 text-white' : 'bg-slate-200/60 text-slate-700'
               }`}>
-                {topic.commandCount} {topic.commandCount === 1 ? 'step' : 'steps'}
+                {topic.commandCount || topic.steps.length} {(topic.commandCount || topic.steps.length) === 1 ? 'step' : 'steps'}
               </span>
             </motion.button>
           );

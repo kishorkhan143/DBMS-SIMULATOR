@@ -1,12 +1,21 @@
 export type SQLCommandType = 'DDL' | 'DML' | 'DQL' | 'ADMIN';
 
-export type TableConstraintType = 'UNIQUE' | 'CHECK' | 'NOT_NULL' | 'DEFAULT' | 'PRIMARY_KEY';
+export type TableConstraintType = 'UNIQUE' | 'CHECK' | 'NOT_NULL' | 'DEFAULT' | 'PRIMARY_KEY' | 'FOREIGN_KEY';
+
+export interface ForeignKeyDefinition {
+  name: string;
+  column: string;
+  referencedTable: string;
+  referencedColumn: string;
+}
 
 export interface TableConstraint {
   name?: string;
   type: TableConstraintType;
   column?: string;
   expression?: string;
+  referencedTable?: string;
+  referencedColumn?: string;
 }
 
 export interface ColumnSchema {
@@ -19,6 +28,9 @@ export interface ColumnSchema {
   defaultValue?: string;
   checkConstraint?: string;
   autoIncrement?: boolean;
+  isForeignKey?: boolean;
+  referencesTable?: string;
+  referencesColumn?: string;
 }
 
 export interface TableState {
@@ -26,6 +38,7 @@ export interface TableState {
   columns: ColumnSchema[];
   rows: Record<string, any>[];
   constraints?: TableConstraint[];
+  foreignKeys?: ForeignKeyDefinition[];
   statusNote?: string;
   autoIncrementValue?: number;
 }
@@ -75,7 +88,12 @@ export type AnimationType =
   | 'temporal_query'
   | 'primary_key_error'
   | 'auto_increment_insert'
-  | 'alter_auto_increment';
+  | 'alter_auto_increment'
+  | 'foreign_key_create'
+  | 'foreign_key_insert'
+  | 'foreign_key_drop'
+  | 'foreign_key_add'
+  | 'foreign_key_error';
 
 export interface CommandStep {
   id: string;
@@ -101,6 +119,9 @@ export interface CommandStep {
     highlightedRowIndices?: number[];
     filterCondition?: string;
     aliasMapping?: Record<string, string>;
+    referencedTable?: string;
+    referencedColumn?: string;
+    foreignKeyName?: string;
   };
   beforeState?: {
     databaseName?: string;
@@ -110,6 +131,8 @@ export interface CommandStep {
     columns?: ColumnSchema[];
     rows?: Record<string, any>[];
     constraints?: TableConstraint[];
+    foreignKeys?: ForeignKeyDefinition[];
+    secondaryTable?: TableState;
     availableDatabases?: string[];
   };
   afterState: {
@@ -120,6 +143,8 @@ export interface CommandStep {
     columns?: ColumnSchema[];
     rows?: Record<string, any>[];
     constraints?: TableConstraint[];
+    foreignKeys?: ForeignKeyDefinition[];
+    secondaryTable?: TableState;
     availableDatabases?: string[];
     statusNote?: string;
   };

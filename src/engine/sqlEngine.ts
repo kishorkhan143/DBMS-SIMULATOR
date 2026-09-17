@@ -587,9 +587,51 @@ export function executeQuery(rawSql: string, catalog: SystemCatalog): {
     const tokenList = splitTopLevelCommas(createTableMatch[2]);
     const parsedColumns: ColumnSchema[] = [];
     const constraints: TableConstraint[] = [];
+    const foreignKeys: { name: string; column: string; referencedTable: string; referencedColumn: string }[] = [];
 
     for (const item of tokenList) {
       const trimmed = item.trim();
+
+      // Check for table-level foreign key constraint: [constraint <name>] foreign key (col) references target_table (target_col)
+      const tableFkMatch = trimmed.match(/^(?:constraint\s+([a-zA-Z0-9_]+)\s+)?foreign\s+key\s*\(\s*([a-zA-Z0-9_]+)\s*\)\s*references\s+([a-zA-Z0-9_]+)\s*\(\s*([a-zA-Z0-9_]+)\s*\)$/i);
+      if (tableFkMatch) {
+        const fkName = tableFkMatch[1] || `${tableName}_ibfk_${foreignKeys.length + 1}`;
+        const fkCol = tableFkMatch[2];
+        const refTable = tableFkMatch[3];
+        const refCol = tableFkMatch[4];
+        foreignKeys.push({
+          name: fkName,
+          column: fkCol,
+          referencedTable: refTable,
+          referencedColumn: refCol
+        });
+        constraints.push({
+          name: fkName,
+          type: 'FOREIGN_KEY',
+          column: fkCol,
+          referencedTable: refTable,
+          referencedColumn: refCol
+        });
+        continue;
+      }
+
+      // Check for table-level primary key: [constraint <name>] primary key (col)
+      const tablePkMatch = trimmed.match(/^(?:constraint\s+([a-zA-Z0-9_]+)\s+)?primary\s+key\s*\(\s*([a-zA-Z0-9_]+)\s*\)$/i);
+      if (tablePkMatch) {
+        const pkCol = tablePkMatch[2];
+        const targetCol = parsedColumns.find(c => c.name.toLowerCase() === pkCol.toLowerCase());
+        if (targetCol) {
+          targetCol.isPrimary = true;
+          targetCol.nullable = false;
+          targetCol.isUnique = true;
+        }
+        constraints.push({
+          name: tablePkMatch[1] || 'primary_key',
+          type: 'PRIMARY_KEY',
+          column: pkCol
+        });
+        continue;
+      }
 
       // Check for table-level check constraint: [constraint name] check (expr)
       const tableCheckMatch = trimmed.match(/^(?:constraint\s+([a-zA-Z0-9_]+)\s+)?check\s*\(([\s\S]+)\)$/i);
@@ -661,11 +703,22 @@ export function executeQuery(rawSql: string, catalog: SystemCatalog): {
       }
     }
 
+    // Link foreign key metadata to parsed column schemas
+    for (const fk of foreignKeys) {
+      const col = parsedColumns.find(c => c.name.toLowerCase() === fk.column.toLowerCase());
+      if (col) {
+        col.isForeignKey = true;
+        col.referencesTable = fk.referencedTable;
+        col.referencesColumn = fk.referencedColumn;
+      }
+    }
+
     currentDb.tables[tableName] = {
       name: tableName,
       columns: parsedColumns,
       rows: [],
       constraints,
+      foreignKeys,
       autoIncrementValue: 1
     };
 
@@ -826,6 +879,124 @@ export function executeQuery(rawSql: string, catalog: SystemCatalog): {
         success: true,
         message: `Query OK, 0 rows affected (${((performance.now() - start) / 1000).toFixed(3)} sec)\nRecords: 0  Duplicates: 0  Warnings: 0`,
         affectedRows: 0,
+        timeMs: +(performance.now() - start).toFixed(2)
+      },
+      updatedCatalog
+    };
+  }
+
+  // 13c. ALTER TABLE table DROP FOREIGN KEY fk_name
+  const alterDropFkMatch = cleanSql.match(/^alter\s+table\s+([a-zA-Z0-9_]+)\s+drop\s+foreign\s+key\s+([a-zA-Z0-9_]+)$/i);
+  if (alterDropFkMatch) {
+    const tableName = alterDropFkMatch[1];
+    const fkName = alterDropFkMatch[2];
+    const table = currentDb.tables[tableName];
+    if (!table) {
+      return {
+        result: {
+          success: false,
+          message: `ERROR 1146 (42S02): Table '${curDbName}.${tableName}' doesn't exist`,
+          timeMs: +(performance.now() - start).toFixed(2)
+        },
+        updatedCatalog
+      };
+    }
+    if (table.foreignKeys) {
+      const droppedFk = table.foreignKeys.find(fk => fk.name.toLowerCase() === fkName.toLowerCase());
+      if (droppedFk) {
+        const col = table.columns.find(c => c.name.toLowerCase() === droppedFk.column.toLowerCase());
+        if (col) {
+          col.isForeignKey = false;
+          col.referencesTable = undefined;
+          col.referencesColumn = undefined;
+        }
+      }
+      table.foreignKeys = table.foreignKeys.filter(fk => fk.name.toLowerCase() !== fkName.toLowerCase());
+    }
+    if (table.constraints) {
+      table.constraints = table.constraints.filter(c => c.name?.toLowerCase() !== fkName.toLowerCase());
+    }
+    return {
+      result: {
+        success: true,
+        message: `Query OK, 0 rows affected (${((performance.now() - start) / 1000).toFixed(3)} sec)\nRecords: 0  Duplicates: 0  Warnings: 0`,
+        affectedRows: 0,
+        timeMs: +(performance.now() - start).toFixed(2)
+      },
+      updatedCatalog
+    };
+  }
+
+  // 13d. ALTER TABLE table ADD [CONSTRAINT fk_name] FOREIGN KEY (col) REFERENCES ref_table (ref_col)
+  const alterAddFkMatch = cleanSql.match(/^alter\s+table\s+([a-zA-Z0-9_]+)\s+add(?:\s+constraint(?:\s+([a-zA-Z0-9_]+))?)?\s+foreign\s+key\s*\(\s*([a-zA-Z0-9_]+)\s*\)\s*references\s+([a-zA-Z0-9_]+)\s*\(\s*([a-zA-Z0-9_]+)\s*\)$/i);
+  if (alterAddFkMatch) {
+    const tableName = alterAddFkMatch[1];
+    const fkName = alterAddFkMatch[2] || `${tableName}_ibfk_${(currentDb.tables[tableName]?.foreignKeys?.length || 0) + 1}`;
+    const colName = alterAddFkMatch[3];
+    const refTableName = alterAddFkMatch[4];
+    const refColName = alterAddFkMatch[5];
+
+    const table = currentDb.tables[tableName];
+    if (!table) {
+      return {
+        result: {
+          success: false,
+          message: `ERROR 1146 (42S02): Table '${curDbName}.${tableName}' doesn't exist`,
+          timeMs: +(performance.now() - start).toFixed(2)
+        },
+        updatedCatalog
+      };
+    }
+    const refTable = currentDb.tables[refTableName];
+    if (!refTable) {
+      return {
+        result: {
+          success: false,
+          message: `ERROR 1146 (42S02): Table '${curDbName}.${refTableName}' doesn't exist`,
+          timeMs: +(performance.now() - start).toFixed(2)
+        },
+        updatedCatalog
+      };
+    }
+    const col = table.columns.find(c => c.name.toLowerCase() === colName.toLowerCase());
+    if (!col) {
+      return {
+        result: {
+          success: false,
+          message: `ERROR 1072 (42000): Key column '${colName}' doesn't exist in table`,
+          timeMs: +(performance.now() - start).toFixed(2)
+        },
+        updatedCatalog
+      };
+    }
+
+    if (!table.foreignKeys) table.foreignKeys = [];
+    if (!table.constraints) table.constraints = [];
+
+    table.foreignKeys.push({
+      name: fkName,
+      column: colName,
+      referencedTable: refTableName,
+      referencedColumn: refColName
+    });
+    table.constraints.push({
+      name: fkName,
+      type: 'FOREIGN_KEY',
+      column: colName,
+      referencedTable: refTableName,
+      referencedColumn: refColName
+    });
+
+    col.isForeignKey = true;
+    col.referencesTable = refTableName;
+    col.referencesColumn = refColName;
+
+    const rowCount = table.rows.length;
+    return {
+      result: {
+        success: true,
+        message: `Query OK, ${rowCount} rows affected (${((performance.now() - start) / 1000).toFixed(3)} sec)\nRecords: ${rowCount}  Duplicates: 0  Warnings: 0`,
+        affectedRows: rowCount,
         timeMs: +(performance.now() - start).toFixed(2)
       },
       updatedCatalog
@@ -1248,6 +1419,41 @@ export function executeQuery(rawSql: string, catalog: SystemCatalog): {
       updatedCatalog.transactionSnapshot = JSON.parse(JSON.stringify(updatedCatalog.databases));
     }
 
+    // Referential Integrity Check: Does another child table have a FOREIGN KEY referencing this table?
+    const rowsToDelete = whereExpr 
+      ? table.rows.filter(row => evaluateWherePredicate(row, whereExpr))
+      : table.rows;
+
+    if (rowsToDelete.length > 0) {
+      for (const otherTableName of Object.keys(currentDb.tables)) {
+        if (otherTableName === tableName) continue;
+        const otherTable = currentDb.tables[otherTableName];
+        if (otherTable.foreignKeys && otherTable.foreignKeys.length > 0) {
+          for (const fk of otherTable.foreignKeys) {
+            if (fk.referencedTable.toLowerCase() === tableName.toLowerCase()) {
+              for (const parentRow of rowsToDelete) {
+                const parentVal = parentRow[fk.referencedColumn];
+                if (parentVal !== null && parentVal !== undefined) {
+                  const parentValStr = String(parentVal).toLowerCase();
+                  const childHasRef = otherTable.rows.some(cr => cr[fk.column] !== null && cr[fk.column] !== undefined && String(cr[fk.column]).toLowerCase() === parentValStr);
+                  if (childHasRef) {
+                    return {
+                      result: {
+                        success: false,
+                        message: `ERROR 1451 (23000): Cannot delete or update a parent row: a foreign key constraint fails (\`${curDbName}\`.\`${otherTable.name}\`, CONSTRAINT \`${fk.name}\` FOREIGN KEY (\`${fk.column}\`) REFERENCES \`${tableName}\` (\`${fk.referencedColumn}\`))`,
+                        timeMs: +(performance.now() - start).toFixed(2)
+                      },
+                      updatedCatalog
+                    };
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
     const initialCount = table.rows.length;
     if (!whereExpr) {
       table.rows = [];
@@ -1447,6 +1653,30 @@ export function executeQuery(rawSql: string, catalog: SystemCatalog): {
                 },
                 updatedCatalog
               };
+            }
+          }
+        }
+      }
+
+      // Constraint Validation 4: FOREIGN KEY
+      if (table.foreignKeys && table.foreignKeys.length > 0) {
+        for (const fk of table.foreignKeys) {
+          const val = rowObj[fk.column];
+          if (val !== null && val !== undefined) {
+            const parentTable = currentDb.tables[fk.referencedTable];
+            if (parentTable) {
+              const valStr = String(val).toLowerCase();
+              const parentExists = parentTable.rows.some(pr => pr[fk.referencedColumn] !== null && pr[fk.referencedColumn] !== undefined && String(pr[fk.referencedColumn]).toLowerCase() === valStr);
+              if (!parentExists) {
+                return {
+                  result: {
+                    success: false,
+                    message: `ERROR 1452 (23000): Cannot add or update a child row: a foreign key constraint fails (\`${curDbName}\`.\`${table.name}\`, CONSTRAINT \`${fk.name}\` FOREIGN KEY (\`${fk.column}\`) REFERENCES \`${fk.referencedTable}\` (\`${fk.referencedColumn}\`))`,
+                    timeMs: +(performance.now() - start).toFixed(2)
+                  },
+                  updatedCatalog
+                };
+              }
             }
           }
         }

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Part } from '../types/sql';
-import { Database, ArrowRight, Terminal, RotateCcw, ShieldCheck, Play, ChevronDown, KeyRound, Sparkles } from 'lucide-react';
+import { Database, ArrowRight, Terminal, RotateCcw, ShieldCheck, Play, ChevronDown, KeyRound, Sparkles, Link2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useIsMobile } from '../utils/useIsMobile';
 
@@ -16,9 +16,7 @@ export const HomePage: React.FC<HomePageProps> = ({
   onOpenQuickTerminal,
 }) => {
   const isMobile = useIsMobile();
-  const visibleParts = parts.filter(p =>
-    ['part-1', 'part-2', 'part-3', 'part-4', 'part-5'].includes(p.id)
-  );
+  const visibleParts = parts;
 
   const [hoveredPartId, setHoveredPartId] = useState<string | null>(null);
   const [clickedPartId, setClickedPartId] = useState<string | null>(null);
@@ -136,15 +134,35 @@ export const HomePage: React.FC<HomePageProps> = ({
       gradient: 'from-violet-600 to-fuchsia-600',
       tagBg: 'bg-violet-500/15 text-violet-800 dark:text-violet-300 border-violet-500/30',
       actionText: 'Explore Part 5 — Primary Keys & Auto Increment',
+    },
+    'part-6': {
+      color: 'teal',
+      badge: 'Part 6 • Foreign Keys & Referential Integrity',
+      icon: Link2,
+      highlightTags: [
+        'Parent Table (customers)',
+        'AUTO_INCREMENT c_id',
+        'FOREIGN KEY (customer_id)',
+        'REFERENCES customers(c_id)',
+        'Child Table (transactions)',
+        'DROP FOREIGN KEY transactions_ibfk_1',
+        'ADD CONSTRAINT fk_c_id',
+        'Protected Deletion (Error 1451)'
+      ],
+      stepsCount: '10 Steps',
+      modulesCount: '3 Modules',
+      gradient: 'from-emerald-600 to-teal-600',
+      tagBg: 'bg-teal-500/15 text-teal-800 dark:text-teal-300 border-teal-500/30',
+      actionText: 'Explore Part 6 — Foreign Keys & Referential Integrity',
     }
   };
 
   return (
-    <div className="max-w-5xl mx-auto py-2 sm:py-5 space-y-4 sm:space-y-5">
+    <div className="max-w-6xl mx-auto py-2 sm:py-5 space-y-4 sm:space-y-5">
       {/* Compact Interactive Curriculum Cards with Smooth Hover Elaborate & Smooth Compression */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 sm:gap-4 px-1 sm:px-0">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4 px-1 sm:px-0">
         {visibleParts.map((part, index) => {
-          const meta = partMeta[part.id] || partMeta['part-1'];
+          const meta = partMeta[part.id] || partMeta['part-5'];
           const Icon = meta.icon;
           const isHovered = !isMobile && hoveredPartId === part.id;
           const isClicked = clickedPartId === part.id;

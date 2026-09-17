@@ -21,7 +21,8 @@ import {
   Unlock,
   CornerDownRight,
   Key,
-  AlertTriangle
+  AlertTriangle,
+  Link2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -394,6 +395,22 @@ export const TopicViewer: React.FC<TopicViewerProps> = ({
                   </span>
                 </div>
 
+                {/* Active Foreign Key Constraints Info */}
+                {activeState.foreignKeys && activeState.foreignKeys.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2 px-3.5 py-2 rounded-xl bg-blue-500/10 border border-blue-500/25 backdrop-blur-md">
+                    <span className="text-[10px] uppercase font-bold tracking-wider text-blue-700 dark:text-blue-300 flex items-center gap-1">
+                      <Link2 className="w-3 h-3 text-blue-600 dark:text-blue-400" />
+                      Foreign Key Constraints:
+                    </span>
+                    {activeState.foreignKeys.map((fk) => (
+                      <span key={fk.name} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-500/20 text-blue-900 dark:text-blue-200 text-xs font-mono font-semibold">
+                        <span className="font-bold">{fk.name}:</span>
+                        <span>{fk.column} &rarr; {fk.referencedTable}({fk.referencedColumn})</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+
                 {/* Frosted Table Grid */}
                 <div className="overflow-x-auto rounded-2xl border border-white/80 bg-white/40 backdrop-blur-xl shadow-xs custom-scrollbar">
                   <table className="w-full text-left border-collapse">
@@ -427,6 +444,12 @@ export const TopicViewer: React.FC<TopicViewerProps> = ({
                                   {col.autoIncrement && (
                                     <span title="Auto Increment" className="inline-flex items-center text-[9px] font-mono px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-900 dark:text-purple-300 border border-purple-500/40 font-bold shrink-0">
                                       AUTO
+                                    </span>
+                                  )}
+                                  {col.isForeignKey && (
+                                    <span title={`Foreign Key referencing ${col.referencesTable}(${col.referencesColumn})`} className="inline-flex items-center gap-0.5 text-[9px] font-mono px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-900 dark:text-blue-300 border border-blue-500/40 font-bold shrink-0">
+                                      <Link2 className="w-2.5 h-2.5" />
+                                      FK
                                     </span>
                                   )}
                                 </div>
@@ -500,6 +523,67 @@ export const TopicViewer: React.FC<TopicViewerProps> = ({
                     </tbody>
                   </table>
                 </div>
+
+                {/* Referenced Secondary Table (e.g. Parent Table in Foreign Keys) */}
+                {activeState.secondaryTable && (
+                  <div className="mt-3.5 p-3.5 sm:p-4 rounded-2xl bg-white/30 dark:bg-slate-900/30 border border-blue-500/30 backdrop-blur-xl shadow-xs space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Link2 className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                        <span className="text-xs text-slate-500">Referenced Parent Table:</span>
+                        <span className="font-mono text-xs font-bold text-blue-900 dark:text-blue-200 bg-blue-500/15 px-2.5 py-0.5 rounded-lg border border-blue-500/30">
+                          {activeState.secondaryTable.name}
+                        </span>
+                      </div>
+                      <span className="text-[11px] text-slate-500 font-mono">
+                        {activeState.secondaryTable.columns.length} Columns &bull; {activeState.secondaryTable.rows.length} Rows
+                      </span>
+                    </div>
+
+                    <div className="overflow-x-auto rounded-xl border border-white/70 dark:border-slate-800/70 bg-white/50 dark:bg-slate-800/50 backdrop-blur-md custom-scrollbar">
+                      <table className="w-full text-left border-collapse font-mono text-xs">
+                        <thead>
+                          <tr className="border-b border-white/60 dark:border-slate-700/60 bg-white/60 dark:bg-slate-800/80">
+                            {activeState.secondaryTable.columns.map((col) => (
+                              <th key={col.name} className="p-3 text-slate-800 dark:text-slate-200 font-semibold border-r border-white/50 dark:border-slate-700/50">
+                                <div className="flex items-center gap-1.5">
+                                  <span>{col.name}</span>
+                                  {col.isPrimary && (
+                                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-900 dark:text-amber-300 font-bold border border-amber-500/30">
+                                      PK
+                                    </span>
+                                  )}
+                                  <span className="text-[10px] text-slate-500 font-normal">
+                                    {col.type}
+                                  </span>
+                                </div>
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {activeState.secondaryTable.rows.length === 0 ? (
+                            <tr>
+                              <td colSpan={activeState.secondaryTable.columns.length} className="p-4 text-center text-xs text-slate-500 italic">
+                                Empty table.
+                              </td>
+                            </tr>
+                          ) : (
+                            activeState.secondaryTable.rows.map((row, idx) => (
+                              <tr key={idx} className="border-b border-white/40 dark:border-slate-800/40 hover:bg-white/40 dark:hover:bg-slate-800/40 text-slate-800 dark:text-slate-200">
+                                {activeState.secondaryTable!.columns.map((col) => (
+                                  <td key={col.name} className="p-3 border-r border-white/40 dark:border-slate-800/40">
+                                    {String(row[col.name] ?? 'NULL')}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               !activeState.availableDatabases && (
