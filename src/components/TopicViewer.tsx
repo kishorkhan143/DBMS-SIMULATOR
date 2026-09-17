@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Topic, CommandStep, ColumnSchema } from '../types/sql';
+import { useIsMobile } from '../utils/useIsMobile';
 import {
   Play,
   RotateCcw,
@@ -18,7 +19,9 @@ import {
   ArrowRight,
   Lock,
   Unlock,
-  CornerDownRight
+  CornerDownRight,
+  Key,
+  AlertTriangle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -33,6 +36,7 @@ export const TopicViewer: React.FC<TopicViewerProps> = ({
   onSendToTerminal,
   onOpenQuiz,
 }) => {
+  const isMobile = useIsMobile();
   const [selectedStepIndex, setSelectedStepIndex] = useState<number>(0);
   const [isShowingAfterState, setIsShowingAfterState] = useState<boolean>(true);
   const [animationPlaying, setAnimationPlaying] = useState<boolean>(false);
@@ -322,11 +326,11 @@ export const TopicViewer: React.FC<TopicViewerProps> = ({
                       return (
                         <motion.div
                           key={dbName}
-                          layout
-                          initial={{ opacity: 0, scale: 0.8 }}
+                          layout={!isMobile}
+                          initial={isMobile ? false : { opacity: 0, scale: 0.8 }}
                           animate={{ opacity: 1, scale: 1 }}
                           exit={{ opacity: 0, scale: 0.6 }}
-                          transition={{ type: 'spring', stiffness: 350, damping: 25 }}
+                          transition={isMobile ? { duration: 0.15 } : { type: 'spring', stiffness: 350, damping: 25 }}
                           className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-mono border backdrop-blur-md transition-all ${
                             isNew
                               ? 'bg-emerald-500/20 border-emerald-400 text-emerald-950 shadow-sm ring-2 ring-emerald-500/20 font-bold'
@@ -350,6 +354,24 @@ export const TopicViewer: React.FC<TopicViewerProps> = ({
               </div>
             )}
 
+            {/* Engine Response Message (e.g. Query OK, ERROR 1062, etc.) */}
+            {currentStep.statusMessage && (
+              <div className={`p-3.5 rounded-2xl border text-xs font-mono flex items-start gap-2.5 shadow-2xs backdrop-blur-md ${
+                currentStep.statusMessage.startsWith('ERROR')
+                  ? 'bg-rose-500/15 border-rose-500/35 text-rose-950 dark:text-rose-200'
+                  : 'bg-emerald-500/15 border-emerald-500/35 text-emerald-950 dark:text-emerald-200'
+              }`}>
+                {currentStep.statusMessage.startsWith('ERROR') ? (
+                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                ) : (
+                  <Terminal className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                )}
+                <div className="flex-1 whitespace-pre-wrap leading-relaxed">
+                  {currentStep.statusMessage}
+                </div>
+              </div>
+            )}
+
             {/* Table Morphing Grid Stage in Ultra-Frosted Liquid Glass */}
             {activeState.tableName ? (
               <div className="space-y-3">
@@ -359,7 +381,7 @@ export const TopicViewer: React.FC<TopicViewerProps> = ({
                     <span className="text-xs text-slate-500">Active View:</span>
                     <motion.span
                       key={activeState.tableName}
-                      initial={{ scale: 0.95, opacity: 0 }}
+                      initial={isMobile ? false : { scale: 0.95, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
                       className="font-mono text-xs font-bold text-emerald-800 bg-emerald-500/15 px-2.5 py-1 rounded-xl border border-emerald-500/30 backdrop-blur-sm"
                     >
@@ -385,8 +407,8 @@ export const TopicViewer: React.FC<TopicViewerProps> = ({
                           return (
                             <motion.th
                               key={col.name}
-                              layout
-                              transition={{ type: 'spring', stiffness: 350, damping: 28 }}
+                              layout={!isMobile}
+                              transition={isMobile ? { duration: 0.15 } : { type: 'spring', stiffness: 350, damping: 28 }}
                               className={`p-3.5 text-xs font-semibold font-mono border-r border-white/60 transition-colors ${
                                 isHighlighted && isShowingAfterState
                                   ? 'bg-emerald-500/20 text-emerald-950 ring-2 ring-emerald-400/50 backdrop-blur-md'
@@ -394,13 +416,26 @@ export const TopicViewer: React.FC<TopicViewerProps> = ({
                               }`}
                             >
                               <div className="flex items-center justify-between gap-2">
-                                <span className="font-bold">{col.name}</span>
-                                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-slate-200/80 text-slate-700 border border-slate-300/60 font-semibold">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <span className="font-bold truncate">{col.name}</span>
+                                  {col.isPrimary && (
+                                    <span title="Primary Key" className="inline-flex items-center gap-0.5 text-[9px] font-mono px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-900 dark:text-amber-300 border border-amber-500/40 font-bold shrink-0">
+                                      <Key className="w-2.5 h-2.5" />
+                                      PK
+                                    </span>
+                                  )}
+                                  {col.autoIncrement && (
+                                    <span title="Auto Increment" className="inline-flex items-center text-[9px] font-mono px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-900 dark:text-purple-300 border border-purple-500/40 font-bold shrink-0">
+                                      AUTO
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-slate-200/80 text-slate-700 border border-slate-300/60 font-semibold shrink-0">
                                   {col.type}
                                 </span>
                               </div>
                               <div className="text-[10px] text-slate-500 font-sans mt-0.5">
-                                Pos #{idx + 1}
+                                Pos #{idx + 1} {col.nullable === false && '• NOT NULL'}
                               </div>
                             </motion.th>
                           );
@@ -434,9 +469,9 @@ export const TopicViewer: React.FC<TopicViewerProps> = ({
                           return (
                             <motion.tr
                               key={rIdx}
-                              initial={{ opacity: 0, y: 4 }}
+                              initial={isMobile ? false : { opacity: 0, y: 4 }}
                               animate={{ opacity: 1, y: 0 }}
-                              transition={{ duration: 0.2, delay: rIdx * 0.03 }}
+                              transition={isMobile ? { duration: 0.15 } : { duration: 0.2, delay: rIdx * 0.03 }}
                               className={rowStyle}
                             >
                               {columnsToRender.map((col) => {

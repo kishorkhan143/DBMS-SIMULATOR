@@ -628,8 +628,9 @@ export function executeQuery(rawSql: string, catalog: SystemCatalog): {
         const modifiers = parts.slice(restIdx).join(' ');
 
         const isPrimary = /primary\s+key/i.test(modifiers) || /primary\s+key/i.test(trimmed);
-        const isNotNull = /not\s+null/i.test(modifiers);
-        const isUnique = /\bunique\b/i.test(modifiers);
+        const isAutoIncrement = /auto_increment/i.test(modifiers) || /auto_increment/i.test(trimmed);
+        const isNotNull = /not\s+null/i.test(modifiers) || isPrimary;
+        const isUnique = /\bunique\b/i.test(modifiers) || isPrimary;
 
         let defaultValue: string | undefined = undefined;
         const defaultMatch = modifiers.match(/default\s+([^\s,]+)/i);
@@ -654,7 +655,8 @@ export function executeQuery(rawSql: string, catalog: SystemCatalog): {
           isPrimary,
           nullable: !isNotNull,
           isUnique,
-          defaultValue
+          defaultValue,
+          autoIncrement: isAutoIncrement
         });
       }
     }
@@ -663,7 +665,8 @@ export function executeQuery(rawSql: string, catalog: SystemCatalog): {
       name: tableName,
       columns: parsedColumns,
       rows: [],
-      constraints
+      constraints,
+      autoIncrementValue: 1
     };
 
     return {
@@ -718,12 +721,12 @@ export function executeQuery(rawSql: string, catalog: SystemCatalog): {
     };
   }
 
-  // 13. ALTER TABLE product ADD CONSTRAINT check_price CHECK (...) / UNIQUE (...)
-  const alterAddConstraintMatch = cleanSql.match(/^alter\s+table\s+([a-zA-Z0-9_]+)\s+add(?:\s+constraint(?:\s+([a-zA-Z0-9_]+))?)?\s+(unique|check)\s*\(([\s\S]+)\)$/i);
+  // 13. ALTER TABLE product ADD CONSTRAINT check_price CHECK (...) / UNIQUE (...) / PRIMARY KEY (...)
+  const alterAddConstraintMatch = cleanSql.match(/^alter\s+table\s+([a-zA-Z0-9_]+)\s+add(?:\s+constraint(?:\s+([a-zA-Z0-9_]+))?)?\s+(unique|check|primary\s+key)\s*\(([\s\S]+)\)$/i);
   if (alterAddConstraintMatch) {
     const tableName = alterAddConstraintMatch[1];
     const constraintName = alterAddConstraintMatch[2] || alterAddConstraintMatch[3].toLowerCase();
-    const constraintType = alterAddConstraintMatch[3].toUpperCase();
+    const rawConstraintType = alterAddConstraintMatch[3].toUpperCase().replace(/\s+/g, ' ');
     const clauseBody = alterAddConstraintMatch[4].trim();
 
     const table = currentDb.tables[tableName];
@@ -740,7 +743,40 @@ export function executeQuery(rawSql: string, catalog: SystemCatalog): {
 
     if (!table.constraints) table.constraints = [];
 
-    if (constraintType === 'UNIQUE') {
+    if (rawConstraintType === 'PRIMARY KEY') {
+      const colName = clauseBody.replace(/['"`]/g, '').trim();
+      const col = table.columns.find(c => c.name.toLowerCase() === colName.toLowerCase());
+      if (!col) {
+        return {
+          result: {
+            success: false,
+            message: `ERROR 1054 (42S22): Unknown column '${colName}' in '${tableName}'`,
+            timeMs: +(performance.now() - start).toFixed(2)
+          },
+          updatedCatalog
+        };
+      }
+      // Check if primary key already exists
+      const existingPk = table.columns.find(c => c.isPrimary);
+      if (existingPk) {
+        return {
+          result: {
+            success: false,
+            message: 'ERROR 1068 (42000): Multiple primary key defined',
+            timeMs: +(performance.now() - start).toFixed(2)
+          },
+          updatedCatalog
+        };
+      }
+      col.isPrimary = true;
+      col.nullable = false;
+      col.isUnique = true;
+      table.constraints.push({
+        name: constraintName,
+        type: 'PRIMARY_KEY',
+        column: colName
+      });
+    } else if (rawConstraintType === 'UNIQUE') {
       const colName = clauseBody.replace(/['"`]/g, '').trim();
       const col = table.columns.find(c => c.name.toLowerCase() === colName.toLowerCase());
       if (col) col.isUnique = true;
@@ -749,7 +785,7 @@ export function executeQuery(rawSql: string, catalog: SystemCatalog): {
         type: 'UNIQUE',
         column: colName
       });
-    } else if (constraintType === 'CHECK') {
+    } else if (rawConstraintType === 'CHECK') {
       table.constraints.push({
         name: constraintName,
         type: 'CHECK',
@@ -757,6 +793,34 @@ export function executeQuery(rawSql: string, catalog: SystemCatalog): {
       });
     }
 
+    return {
+      result: {
+        success: true,
+        message: `Query OK, 0 rows affected (${((performance.now() - start) / 1000).toFixed(3)} sec)\nRecords: 0  Duplicates: 0  Warnings: 0`,
+        affectedRows: 0,
+        timeMs: +(performance.now() - start).toFixed(2)
+      },
+      updatedCatalog
+    };
+  }
+
+  // 13b. ALTER TABLE table AUTO_INCREMENT = 200
+  const alterAutoIncMatch = cleanSql.match(/^alter\s+table\s+([a-zA-Z0-9_]+)\s+auto_increment\s*=\s*([0-9]+)$/i);
+  if (alterAutoIncMatch) {
+    const tableName = alterAutoIncMatch[1];
+    const newSeed = parseInt(alterAutoIncMatch[2], 10);
+    const table = currentDb.tables[tableName];
+    if (!table) {
+      return {
+        result: {
+          success: false,
+          message: `ERROR 1146 (42S02): Table '${curDbName}.${tableName}' doesn't exist`,
+          timeMs: +(performance.now() - start).toFixed(2)
+        },
+        updatedCatalog
+      };
+    }
+    table.autoIncrementValue = newSeed;
     return {
       result: {
         success: true,
@@ -953,6 +1017,13 @@ export function executeQuery(rawSql: string, catalog: SystemCatalog): {
 
     if (/not\s+null/i.test(restDefinition)) {
       existingCol.nullable = false;
+    }
+
+    if (/auto_increment/i.test(restDefinition)) {
+      existingCol.autoIncrement = true;
+      if (!table.autoIncrementValue) {
+        table.autoIncrementValue = 1;
+      }
     }
 
     // Handle positioning
@@ -1277,6 +1348,19 @@ export function executeQuery(rawSql: string, catalog: SystemCatalog): {
 
     for (const tupleStr of valTuples) {
       const rawValues = splitTopLevelCommas(tupleStr);
+
+      // Validate column count vs value count when no explicit column list is given
+      if (!insertMatch[2] && rawValues.length !== table.columns.length) {
+        return {
+          result: {
+            success: false,
+            message: `ERROR 1136 (21S01): Column count doesn't match value count at row ${preparedRows.length + 1}`,
+            timeMs: +(performance.now() - start).toFixed(2)
+          },
+          updatedCatalog
+        };
+      }
+
       const rowObj: Record<string, any> = {};
 
       // Initialize with column defaults or null
@@ -1297,9 +1381,26 @@ export function executeQuery(rawSql: string, catalog: SystemCatalog): {
         rowObj[colName] = v;
       });
 
-      // Constraint Validation 1: NOT NULL
+      // Auto-increment column resolution
       for (const c of table.columns) {
-        if (c.nullable === false && (rowObj[c.name] === null || rowObj[c.name] === undefined)) {
+        if (c.autoIncrement) {
+          if (rowObj[c.name] === null || rowObj[c.name] === undefined) {
+            const nextVal = table.autoIncrementValue ?? 1;
+            rowObj[c.name] = nextVal;
+            table.autoIncrementValue = nextVal + 1;
+          } else {
+            const numericVal = Number(rowObj[c.name]);
+            if (!isNaN(numericVal) && numericVal >= (table.autoIncrementValue ?? 1)) {
+              table.autoIncrementValue = numericVal + 1;
+            }
+          }
+        }
+      }
+
+      // Constraint Validation 1: NOT NULL & PRIMARY KEY
+      for (const c of table.columns) {
+        const isMandatory = c.nullable === false || c.isPrimary;
+        if (isMandatory && (rowObj[c.name] === null || rowObj[c.name] === undefined)) {
           return {
             result: {
               success: false,
@@ -1311,18 +1412,19 @@ export function executeQuery(rawSql: string, catalog: SystemCatalog): {
         }
       }
 
-      // Constraint Validation 2: UNIQUE
+      // Constraint Validation 2: UNIQUE & PRIMARY KEY
       for (const c of table.columns) {
-        const isColUnique = c.isUnique || (table.constraints && table.constraints.some(tc => tc.type === 'UNIQUE' && tc.column?.toLowerCase() === c.name.toLowerCase()));
+        const isColUnique = c.isUnique || c.isPrimary || (table.constraints && table.constraints.some(tc => (tc.type === 'UNIQUE' || tc.type === 'PRIMARY_KEY') && tc.column?.toLowerCase() === c.name.toLowerCase()));
         if (isColUnique && rowObj[c.name] !== null && rowObj[c.name] !== undefined) {
           const valToCheck = String(rowObj[c.name]).toLowerCase();
           const existsInTable = table.rows.some(r => r[c.name] !== null && String(r[c.name]).toLowerCase() === valToCheck);
           const existsInBatch = preparedRows.some(r => r[c.name] !== null && String(r[c.name]).toLowerCase() === valToCheck);
           if (existsInTable || existsInBatch) {
+            const keyDesc = c.isPrimary ? 'PRIMARY' : c.name;
             return {
               result: {
                 success: false,
-                message: `ERROR 1062 (23000): Duplicate entry '${rowObj[c.name]}' for key '${table.name}.${c.name}'`,
+                message: `ERROR 1062 (23000): Duplicate entry '${rowObj[c.name]}' for key '${table.name}.${keyDesc}'`,
                 timeMs: +(performance.now() - start).toFixed(2)
               },
               updatedCatalog

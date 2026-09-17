@@ -1,5 +1,6 @@
 import { Part, QuizQuestion } from '../types/sql';
 import { PART_3, PART_4, PART_3_4_QUIZ, PART_3_4_PRESETS } from './curriculumParts3And4';
+import { PART_5, PART_5_QUIZ, PART_5_PRESETS } from './curriculumPart5';
 
 export const CURRICULUM_PARTS: Part[] = [
   {
@@ -1787,7 +1788,8 @@ export const CURRICULUM_PARTS: Part[] = [
     ]
   },
   PART_3,
-  PART_4
+  PART_4,
+  PART_5
 ];
 
 export const QUIZ_QUESTIONS: QuizQuestion[] = [
@@ -1937,7 +1939,8 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
     correctIndex: 2,
     explanation: 'Column aliases with AS only affect the header displayed in the output grid of that particular query; the underlying table schema is not modified.'
   },
-  ...PART_3_4_QUIZ
+  ...PART_3_4_QUIZ,
+  ...PART_5_QUIZ
 ];
 
 export const PRESET_PRACTICE_QUERIES = [
@@ -1975,5 +1978,6 @@ export const PRESET_PRACTICE_QUERIES = [
   { label: 'P2: Select where join_date is null', query: 'select * from emp where  join_date is null;' },
   { label: 'P2: Select where join_date is not null', query: 'select * from emp where  join_date is not null;' },
 
-  ...PART_3_4_PRESETS
+  ...PART_3_4_PRESETS,
+  ...PART_5_PRESETS
 ];

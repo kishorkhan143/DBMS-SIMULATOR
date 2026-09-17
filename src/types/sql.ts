@@ -1,8 +1,10 @@
 export type SQLCommandType = 'DDL' | 'DML' | 'DQL' | 'ADMIN';
 
+export type TableConstraintType = 'UNIQUE' | 'CHECK' | 'NOT_NULL' | 'DEFAULT' | 'PRIMARY_KEY';
+
 export interface TableConstraint {
   name?: string;
-  type: 'UNIQUE' | 'CHECK' | 'NOT_NULL' | 'DEFAULT';
+  type: TableConstraintType;
   column?: string;
   expression?: string;
 }
@@ -16,6 +18,7 @@ export interface ColumnSchema {
   isUnique?: boolean;
   defaultValue?: string;
   checkConstraint?: string;
+  autoIncrement?: boolean;
 }
 
 export interface TableState {
@@ -24,6 +27,7 @@ export interface TableState {
   rows: Record<string, any>[];
   constraints?: TableConstraint[];
   statusNote?: string;
+  autoIncrementValue?: number;
 }
 
 export interface DatabaseState {
@@ -68,7 +72,10 @@ export type AnimationType =
   | 'add_constraint'
   | 'drop_constraint'
   | 'alter_default'
-  | 'temporal_query';
+  | 'temporal_query'
+  | 'primary_key_error'
+  | 'auto_increment_insert'
+  | 'alter_auto_increment';
 
 export interface CommandStep {
   id: string;

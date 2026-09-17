@@ -223,3 +223,52 @@
 html {
   scroll-behavior: smooth;
 }
+
+/* ==========================================================================
+   Mobile Performance Engine: Normal lightweight animations on mobile
+   Prevents GPU lagging, excessive backdrop blur redraws, and spring stutters
+   ========================================================================== */
+@media (max-width: 767px) {
+  /* Tame heavy multi-layer backdrop-filter blurs which cause mobile rendering bottlenecks */
+  .liquid-glass,
+  .liquid-glass-card,
+  .liquid-glass-dock {
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06) !important;
+  }
+
+  .liquid-glass-subtle,
+  .liquid-glass-pill {
+    backdrop-filter: blur(8px) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04) !important;
+  }
+
+  .dark .liquid-glass,
+  .dark .liquid-glass-card,
+  .dark .liquid-glass-dock {
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45) !important;
+  }
+
+  .dark .liquid-glass-subtle,
+  .dark .liquid-glass-pill {
+    backdrop-filter: blur(8px) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3) !important;
+  }
+
+  /* Eliminate expensive top sheen pseudo-element redraws during scroll on mobile */
+  .glass-sheen::before {
+    display: none !important;
+  }
+
+  /* Optimize transitions on mobile to normal, crisp, fast durations */
+  *, ::before, ::after {
+    animation-duration: 0.2s !important;
+    transition-duration: 0.18s !important;
+  }
+}
+
